@@ -293,11 +293,15 @@ get_app_config() {
 generate_dockerfile_interactive() {
     echo ""
     log_info "Select application type:"
-    options=("Node.js" "Python" "Go" "Java" ".NET" "Ruby" "PHP" "Cancel")
+    options=("Node.js" "Node.js (TypeScript)" "Python" "Go" "Java" ".NET" "Ruby" "PHP" "PHP (Laravel)" "Cancel")
     select opt in "${options[@]}"; do
         case $opt in
             "Node.js")
                 generate_nodejs_dockerfile
+                break
+                ;;
+            "Node.js (TypeScript)")
+                generate_nodejs_typescript_dockerfile
                 break
                 ;;
             "Python")
@@ -322,6 +326,10 @@ generate_dockerfile_interactive() {
                 ;;
             "PHP")
                 generate_php_dockerfile
+                break
+                ;;
+            "PHP (Laravel)")
+                generate_laravel_dockerfile
                 break
                 ;;
             "Cancel")
@@ -495,6 +503,77 @@ RUN sed -i 's/Listen 80/Listen 8080/g' /etc/apache2/ports.conf \
 CMD ["apache2-foreground"]
 EOF
     log_success "PHP Dockerfile created"
+    DOCKERFILE_PATH="./Dockerfile"
+}
+
+generate_laravel_dockerfile() {
+    cat > Dockerfile << 'EOF'
+FROM php:8.2-apache
+
+# System deps and PHP extensions commonly needed by Laravel
+RUN apt-get update && apt-get install -y \
+    git unzip libzip-dev libonig-dev libicu-dev libpng-dev \
+ && docker-php-ext-install pdo_mysql zip intl opcache \
+ && a2enmod rewrite \
+ && rm -rf /var/lib/apt/lists/*
+
+# Set Apache DocumentRoot to public
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
+    /etc/apache2/sites-available/000-default.conf /etc/apache2/apache2.conf
+
+WORKDIR /var/www/html
+
+# Install Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Copy source and install dependencies
+COPY . /var/www/html
+RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader || true \
+ && php artisan config:cache || true \
+ && php artisan route:cache || true
+
+# Ensure proper permissions
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache || true
+
+# Cloud Run uses PORT env; adjust Apache
+ENV PORT=8080
+RUN sed -i 's/Listen 80/Listen 8080/g' /etc/apache2/ports.conf \
+ && sed -i 's/:80/:8080/g' /etc/apache2/sites-available/000-default.conf
+
+EXPOSE 8080
+CMD ["apache2-foreground"]
+EOF
+    log_success "Laravel Dockerfile created"
+    DOCKERFILE_PATH="./Dockerfile"
+}
+
+generate_nodejs_typescript_dockerfile() {
+    cat > Dockerfile << 'EOF'
+# Build stage
+FROM node:18-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+# If you use pnpm/yarn, adjust accordingly
+RUN npm ci
+COPY . .
+# Ensure TypeScript is installed in devDependencies
+RUN npm run build
+
+# Runtime stage
+FROM node:18-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package*.json ./
+RUN npm ci --only=production
+COPY --from=build /app/dist ./dist
+
+# Cloud Run provides PORT
+ENV PORT=8080
+EXPOSE 8080
+CMD ["node", "dist/index.js"]
+EOF
+    log_success "Node.js (TypeScript) Dockerfile created"
     DOCKERFILE_PATH="./Dockerfile"
 }
 
