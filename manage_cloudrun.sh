@@ -568,6 +568,44 @@ domain_mappings_menu() {
     done
 }
 
+# Cleanup old container images
+cleanup_images() {
+    log_step "Cleaning up old container images..."
+    echo ""
+    read -p "Enter service name to clean images for: " SERVICE_NAME
+    read -p "Enter registry domain (e.g., gcr.io or $REGION-docker.pkg.dev): " REGISTRY_DOMAIN
+    
+    if [ -z "$SERVICE_NAME" ] || [ -z "$REGISTRY_DOMAIN" ]; then
+        log_error "Service name and registry domain are required."
+        return 1
+    fi
+    
+    log_info "Finding images to delete for service: $SERVICE_NAME"
+    
+    # Get images that are not tagged and older than 30 days
+    IMAGES_TO_DELETE=$(gcloud container images list-tags "$REGISTRY_DOMAIN/$PROJECT_ID/$SERVICE_NAME" \
+        --filter='-tags:* AND timestamp.datetime < "-P30D"' \
+        --format='get(digest)')
+        
+    if [ -z "$IMAGES_TO_DELETE" ]; then
+        log_success "No old, untagged images found to delete."
+        return
+    fi
+    
+    log_warning "The following images will be deleted:"
+    echo "$IMAGES_TO_DELETE"
+    
+    if confirm "Proceed with deletion?" "n"; then
+        while IFS= read -r digest; do
+            log_info "Deleting image with digest: $digest"
+            gcloud container images delete "$REGISTRY_DOMAIN/$PROJECT_ID/$SERVICE_NAME@$digest" --force-delete-tags --quiet
+        done <<< "$IMAGES_TO_DELETE"
+        log_success "Image cleanup complete."
+    else
+        log_info "Image cleanup cancelled."
+    fi
+}
+
 # Main execution
 main() {
     print_banner "GCP Cloud Run - Management Script" "Manage, Monitor, and Control Your Services"
@@ -592,6 +630,7 @@ main() {
             "Export service configuration"
             "Test service endpoint"
             "Domain mappings"
+            "Cleanup old container images"
             "Change project/region"
             "Exit"
         )
@@ -636,6 +675,10 @@ main() {
                     ;;
                 "Domain mappings")
                     domain_mappings_menu
+                    break
+                    ;;
+                "Cleanup old container images")
+                    cleanup_images
                     break
                     ;;
                 "Change project/region")
