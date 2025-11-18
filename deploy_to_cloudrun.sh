@@ -40,7 +40,7 @@ load_config() {
 
 # Find and offer to load existing config
 find_and_load_config() {
-    local config_files=($(ls .cloudrun_deploy_*.conf 2>/dev/null))
+    local config_files=($(ls .cloudrun_deploy_*.conf 2>/dev/null || true))
     if [ ${#config_files[@]} -gt 0 ]; then
         log_info "Found existing deployment configurations:"
         select config in "${config_files[@]}" "Enter manually"; do
@@ -126,8 +126,13 @@ get_app_config() {
     read -p "Enter Cloud Run service name: " SERVICE_NAME
     
     if [ -z "$SERVICE_NAME" ]; then
-        log_error "Service name cannot be empty"
-        exit 1
+        if [[ "$NON_INTERACTIVE" == "true" || "$DRY_RUN" == "true" ]]; then
+            SERVICE_NAME="demo-service"
+            log_warning "Service name empty; using default: $SERVICE_NAME"
+        else
+            log_error "Service name cannot be empty"
+            exit 1
+        fi
     fi
     
     # Dockerfile location
@@ -680,6 +685,12 @@ EOF
 
 # Choose build mode (Docker vs Source)
 choose_build_mode() {
+    if [[ "$NON_INTERACTIVE" == "true" || "$DRY_RUN" == "true" ]]; then
+        BUILD_FROM_SOURCE=false
+        SOURCE_PATH=.
+        log_info "Non-interactive/dry-run: using local Docker build mode"
+        return
+    fi
     echo ""
     log_info "Build options:"
     options=("Build locally with Docker (current flow)" "Build from source using Cloud Build (no local Docker required)")
@@ -702,6 +713,19 @@ choose_build_mode() {
 
 # Collect advanced deployment options
 collect_advanced_options() {
+    if [[ "$NON_INTERACTIVE" == "true" || "$DRY_RUN" == "true" ]]; then
+        INGRESS=${INGRESS:-all}
+        VPC_EGRESS=${VPC_EGRESS:-all-traffic}
+        EXEC_ENV=${EXEC_ENV:-gen2}
+        SERVICE_ACCOUNT=${SERVICE_ACCOUNT:-}
+        LABELS=${LABELS:-}
+        ANNOTATIONS=${ANNOTATIONS:-}
+        REV_TAG=${REV_TAG:-}
+        NO_TRAFFIC=false
+        REV_SUFFIX=${REV_SUFFIX:-}
+        log_info "Non-interactive/dry-run: using default advanced options"
+        return
+    fi
     echo ""
     log_step "Advanced deployment options"
     
