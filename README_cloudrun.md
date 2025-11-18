@@ -576,3 +576,62 @@ These scripts are provided as-is for use with Google Cloud Platform.
 - Contact GCP Support for platform issues
 
 **Happy Deploying! 🚀**
+
+## New: Build Modes, Advanced Options, and Dry-Run
+
+This toolkit now supports flexible build modes, richer Cloud Run deployment options, and dry-run/non-interactive execution.
+
+### Build Modes
+You can choose how to build and deploy your app:
+- Local Docker build and push (default)
+- Build from source using Cloud Build (no local Docker required)
+
+You will be prompted in `deploy_to_cloudrun.sh` to choose the mode. In non-interactive runs, Docker mode is used by default.
+
+### Advanced Cloud Run Options
+`deploy_to_cloudrun.sh` now collects rich options and applies them to your deployment:
+- Ingress: `all`, `internal`, `internal-and-cloud-load-balancing`
+- VPC Egress: `all-traffic`, `private-ranges-only`
+- Execution environment: `gen2` (recommended)
+- Service account to run as
+- Labels and annotations
+- URL tag (e.g., `blue`, `canary`)
+- No-traffic deploys (deploy without shifting traffic)
+- Optional revision suffix
+
+These options work for both image-based and source-based deployments.
+
+### Domain Mappings
+Use `manage_cloudrun.sh` → option 10 (Domain mappings) to:
+- List domain mappings
+- Create a mapping (service to custom domain)
+- Delete a mapping
+The tool prints guidance for setting DNS records after creation.
+
+### Dry-Run and Non-Interactive Modes
+The scripts can simulate actions without touching GCP. This is useful for CI checks, previews, or learning the flow.
+
+- DRY_RUN=true: wrap calls to `gcloud`, `docker`, and `curl` so that they only print intended actions.
+- NON_INTERACTIVE=true: skip pauses, auto-accept confirmations, and apply sensible defaults.
+
+Examples:
+```bash
+# End-to-end dry run
+DRY_RUN=true NON_INTERACTIVE=true ./quick_start.sh
+
+# Deploy script only (dry run)
+DRY_RUN=true NON_INTERACTIVE=true ./deploy_to_cloudrun.sh
+```
+
+In DRY_RUN/NON_INTERACTIVE, the deploy script:
+- Defaults service name to `demo-service` if omitted
+- Auto-generates a default Dockerfile if missing
+- Defaults registry to Artifact Registry (and auto-creates repository if needed)
+- Defaults execution environment to `gen2`
+- Defaults ingress to `all` and VPC egress to `all-traffic`
+- Uses local Docker build path by default (can be changed later)
+
+### Notes
+- These capabilities are centralized via a shared `common.sh` sourced by all scripts.
+- For production runs, leave `DRY_RUN` unset and run interactively to confirm resources.
+

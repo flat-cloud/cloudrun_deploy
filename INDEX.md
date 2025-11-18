@@ -495,3 +495,26 @@ cat README_cloudrun.md
 ```
 
 **Happy deploying! 🚀**
+
+---
+
+## New Capabilities
+
+- Build modes: local Docker or Cloud Build from source
+- Advanced Cloud Run options (ingress, VPC egress, gen2, service account, tags, labels, annotations, no-traffic)
+- Domain mappings management (list/create/delete)
+- Dry-run and non-interactive support
+
+### Quick Examples
+```bash
+# Dry-run end-to-end
+DRY_RUN=true NON_INTERACTIVE=true ./quick_start.sh
+
+# Dry-run deploy only
+DRY_RUN=true NON_INTERACTIVE=true ./deploy_to_cloudrun.sh
+```
+
+### Where these live
+- Shared behavior (dry-run wrappers, logging, strict mode): `common.sh`
+- Build mode + advanced flags: `deploy_to_cloudrun.sh`
+- Domain mappings: `manage_cloudrun.sh` (menu option 10)
