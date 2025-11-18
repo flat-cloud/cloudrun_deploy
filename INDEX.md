@@ -518,3 +518,34 @@ DRY_RUN=true NON_INTERACTIVE=true ./deploy_to_cloudrun.sh
 - Shared behavior (dry-run wrappers, logging, strict mode): `common.sh`
 - Build mode + advanced flags: `deploy_to_cloudrun.sh`
 - Domain mappings: `manage_cloudrun.sh` (menu option 10)
+
+---
+
+## Important: Generated Files
+
+**These files are created by the scripts and are NOT in the repo by default:**
+
+- `Makefile` - Created by `cloudrun_ci_cd.sh` → option 4 or 7
+- `.github/workflows/deploy-to-cloudrun.yml` - Created by `cloudrun_ci_cd.sh` → option 3 or 7
+- `cloudbuild.yaml` - Created by `cloudrun_ci_cd.sh` → option 1, 2, or 7
+- `Dockerfile` - Created by `deploy_to_cloudrun.sh` if missing (or you provide your own)
+- `.cloudrun_deploy_*.conf` - Created by `deploy_to_cloudrun.sh` to cache settings
+
+**To generate these files:**
+```bash
+# Generate everything
+./cloudrun_ci_cd.sh
+# Select option 7 (Complete setup)
+
+# Or generate individually
+./cloudrun_ci_cd.sh
+# Option 3: GitHub Actions workflow
+# Option 4: Makefile
+# Option 1 or 2: cloudbuild.yaml
+```
+
+**After generation, you can:**
+- Use them as-is (recommended for initial setup)
+- Customize and commit them to your repo
+- Regenerate anytime by re-running the scripts
+
