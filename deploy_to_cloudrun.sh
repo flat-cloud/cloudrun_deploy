@@ -9,6 +9,56 @@
 # Source the common script
 source "$(dirname "$0")/common.sh"
 
+# --- Default values ---
+CONFIG_FILE=""
+SKIP_CONFIRMATIONS=false
+
+# --- Parse command-line arguments ---
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --config) CONFIG_FILE="$2"; shift ;;
+        --yes) SKIP_CONFIRMATIONS=true ;;
+        --debug) set -x ;; # Already handled in common.sh, but good to have here
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
+
+# --- Functions ---
+
+# Load configuration from a file
+load_config() {
+    if [ -f "$1" ]; then
+        log_info "Loading configuration from $1..."
+        source "$1"
+        CONFIG_LOADED=true
+    else
+        log_error "Configuration file not found: $1"
+        exit 1
+    fi
+}
+
+# Find and offer to load existing config
+find_and_load_config() {
+    local config_files=($(ls .cloudrun_deploy_*.conf 2>/dev/null))
+    if [ ${#config_files[@]} -gt 0 ]; then
+        log_info "Found existing deployment configurations:"
+        select config in "${config_files[@]}" "Enter manually"; do
+            if [[ "$config" == "Enter manually" ]]; then
+                CONFIG_LOADED=false
+                break
+            elif [ -n "$config" ]; then
+                load_config "$config"
+                break
+            else
+                log_warning "Invalid selection."
+            fi
+        done
+    else
+        CONFIG_LOADED=false
+    fi
+}
+
 # Get project configuration
 get_project_config() {
     log_step "Gathering project configuration..."
@@ -708,12 +758,18 @@ main() {
     CHECK_DOCKER=true
     check_prerequisites
     
-    get_project_config
-    
-    get_app_config
-    
-    choose_build_mode
-    collect_advanced_options
+    if [ -n "$CONFIG_FILE" ]; then
+        load_config "$CONFIG_FILE"
+    elif [ "$SKIP_CONFIRMATIONS" = false ]; then
+        find_and_load_config
+    fi
+
+    if [ "${CONFIG_LOADED:-false}" = false ]; then
+        get_project_config
+        get_app_config
+        choose_build_mode
+        collect_advanced_options
+    fi
     
     # Summary
     echo ""
@@ -733,7 +789,7 @@ main() {
     log_info "════════════════════════════════════════════════════════════════"
     echo ""
     
-    if ! confirm "Proceed with deployment?" "y"; then
+    if [ "$SKIP_CONFIRMATIONS" = false ] && ! confirm "Proceed with deployment?" "y"; then
         log_info "Deployment cancelled"
         exit 0
     fi
@@ -753,7 +809,7 @@ main() {
     
     # Test the service
     echo ""
-    if confirm "Do you want to test the service now?" "y"; then
+    if [ "$SKIP_CONFIRMATIONS" = false ] && confirm "Do you want to test the service now?" "y"; then
         log_info "Testing service..."
         echo ""
         curl -i $SERVICE_URL
