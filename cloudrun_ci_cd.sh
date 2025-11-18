@@ -501,6 +501,49 @@ test_cloudbuild_locally() {
     echo ""
 }
 
+# Create Makefile with common Cloud Run targets
+create_makefile() {
+    log_step "Creating Makefile..."
+    cat > Makefile << 'EOF'
+# Makefile for Cloud Run
+# Usage: make cloudrun-deploy SERVICE=my-service REGION=us-central1
+
+SERVICE ?= my-service
+REGION  ?= us-central1
+PROJECT ?= $(shell gcloud config get-value project 2>/dev/null)
+
+# Non-interactive deploy with defaults (edit scripts or pass vars via env/config)
+cloudrun-deploy:
+	NON_INTERACTIVE=true ./deploy_to_cloudrun.sh --yes
+
+cloudrun-deploy-source:
+	NON_INTERACTIVE=true ./deploy_to_cloudrun.sh --yes
+
+cloudrun-setup:
+	./setup_gcp_environment.sh
+
+cloudrun-logs:
+	gcloud run logs tail $(SERVICE) --region=$(REGION) --project=$(PROJECT)
+
+cloudrun-manage:
+	./manage_cloudrun.sh
+
+cloudrun-ci:
+	gcloud builds submit --config=cloudbuild.yaml --project=$(PROJECT)
+
+cloudrun-clean:
+	@echo "Cleaning old revisions for $(SERVICE) ..."
+	@./manage_cloudrun.sh || true
+
+cloudrun-domain-map:
+	@echo "Use manage script to create/list/delete domain mappings"
+	@./manage_cloudrun.sh || true
+
+.PHONY: cloudrun-deploy cloudrun-deploy-source cloudrun-setup cloudrun-logs cloudrun-manage cloudrun-ci cloudrun-clean cloudrun-domain-map
+EOF
+    log_success "Created: Makefile"
+}
+
 # Create GitHub Actions workflow
 create_github_actions() {
     log_step "Creating GitHub Actions workflow..."
@@ -519,54 +562,71 @@ on:
   push:
     branches:
       - main
+      - '**'
+  pull_request:
+    branches:
+      - '**'
   workflow_dispatch:
 
 env:
-  PROJECT_ID: \${{ secrets.GCP_PROJECT_ID }}
+  PROJECT_ID: \\${{ secrets.GCP_PROJECT_ID }}
   SERVICE_NAME: $SERVICE_NAME
   REGION: $REGION
-  GAR_LOCATION: $REGION # e.g., us-central1
+  GAR_LOCATION: $REGION
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     permissions:
-      contents: 'read'
-      id-token: 'write'
-    
+      contents: read
+      id-token: write
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-      
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v1
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (OIDC)
+        uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: \${{ secrets.WIF_PROVIDER }}
-          service_account: \${{ secrets.WIF_SERVICE_ACCOUNT }}
-      
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-      
-      - name: Authorize Docker push
-        run: gcloud auth configure-docker \${{ env.GAR_LOCATION }}-docker.pkg.dev
-      
-      - name: Build and Push Container
-        run: |-
-          docker build -t "\${{ env.GAR_LOCATION }}-docker.pkg.dev/\${{ env.PROJECT_ID }}/cloud-run-source-deploy/\${{ env.SERVICE_NAME }}:\${{ github.sha }}" .
-          docker push "\${{ env.GAR_LOCATION }}-docker.pkg.dev/\${{ env.PROJECT_ID }}/cloud-run-source-deploy/\${{ env.SERVICE_NAME }}:\${{ github.sha }}"
-      
+          workload_identity_provider: \\${{ secrets.WIF_PROVIDER }}
+          service_account: \\${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker \\${{ env.GAR_LOCATION }}-docker.pkg.dev --quiet
+
+      - name: Compute image name
+        id: meta
+        run: |
+          BRANCH="\\${{ github.ref_name }}"
+          SAFE_BRANCH=$(echo "$BRANCH" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "safe_branch=$SAFE_BRANCH" >> $GITHUB_OUTPUT
+          echo "image=\\${{ env.GAR_LOCATION }}-docker.pkg.dev/\\${{ env.PROJECT_ID }}/cloud-run-source-deploy/\\${{ env.SERVICE_NAME }}:\\${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Build and push image
+        run: |
+          docker build -t "\\${{ steps.meta.outputs.image }}" .
+          docker push "\\${{ steps.meta.outputs.image }}"
+
       - name: Deploy to Cloud Run
         id: deploy
-        uses: google-github-actions/deploy-cloudrun@v1
+        uses: google-github-actions/deploy-cloudrun@v2
         with:
-          service: \${{ env.SERVICE_NAME }}
-          region: \${{ env.REGION }}
-          image: "\${{ env.GAR_LOCATION }}-docker.pkg.dev/\${{ env.PROJECT_ID }}/cloud-run-source-deploy/\${{ env.SERVICE_NAME }}:\${{ github.sha }}"
-          
-      - name: Show service URL
-        run: echo "Service URL: \${{ steps.deploy.outputs.url }}"
+          service: \\${{ env.SERVICE_NAME }}
+          region: \\${{ env.REGION }}
+          image: "\\${{ steps.meta.outputs.image }}"
+          flags: >-
+            --execution-environment=gen2
+            --ingress=all
+            --concurrency=80
+            --memory=512Mi
+
+      - name: Output service URL
+        run: echo "Service URL: \\${{ steps.deploy.outputs.url }}"
 EOF
     
     log_success "Created: .github/workflows/deploy-to-cloudrun.yml"
@@ -617,6 +677,7 @@ main() {
             "Basic Cloud Build setup"
             "Advanced Cloud Build setup (with tests)"
             "Create GitHub Actions workflow (OIDC)"
+            "Create Makefile"
             "Create deployment configuration files"
             "Test Cloud Build locally"
             "Grant Cloud Build permissions"
@@ -647,6 +708,10 @@ main() {
                     create_github_actions
                     break
                     ;;
+                "Create Makefile")
+                    create_makefile
+                    break
+                    ;;
                 "Create deployment configuration files")
                     create_deployment_configs
                     break
@@ -664,6 +729,7 @@ main() {
                     grant_cloudbuild_permissions
                     create_cloudbuild_config
                     create_deployment_configs
+                    create_makefile
                     create_github_actions
                     show_summary
                     break
