@@ -4,6 +4,12 @@
 # Common Functions and Variables for Cloud Run Scripts
 ################################################################################
 
+# --- Debug Mode ---
+if [[ " $* " =~ " --debug " ]]; then
+    log_warning "Debug mode enabled. Printing all commands."
+    set -x
+fi
+
 # Exit immediately if a command exits with a non-zero status.
 set -Eeuo pipefail
 
