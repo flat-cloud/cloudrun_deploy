@@ -760,7 +760,6 @@ deploy_to_cloudrun() {
             --max-instances=$MAX_INSTANCES \
             --timeout=$TIMEOUT \
             --ingress=$INGRESS \
-            --vpc-egress=$VPC_EGRESS \
             --execution-environment=$EXEC_ENV \
             $ALLOW_UNAUTH"
     else
@@ -777,10 +776,12 @@ deploy_to_cloudrun() {
             --max-instances=$MAX_INSTANCES \
             --timeout=$TIMEOUT \
             --ingress=$INGRESS \
-            --vpc-egress=$VPC_EGRESS \
             --execution-environment=$EXEC_ENV \
             $ALLOW_UNAUTH"
     fi
+    
+    # Only add VPC egress if VPC connector is set
+    [ -n "$VPC_CONNECTOR" ] && DEPLOY_CMD="$DEPLOY_CMD --vpc-egress=$VPC_EGRESS"
     
     # Optional flags
     [ -n "$SERVICE_ACCOUNT" ] && DEPLOY_CMD="$DEPLOY_CMD --service-account=$SERVICE_ACCOUNT"
