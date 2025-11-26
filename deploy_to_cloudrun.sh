@@ -125,7 +125,7 @@ load_checkpoint() {
         echo ""
         log_info "Options:"
         echo "  1) Resume from checkpoint"
-        echo "  2) Edit service name and resume"
+        echo "  2) Edit configuration and resume"
         echo "  3) Start fresh (discard checkpoint)"
         read -p "Choose option [1-3]: " resume_option
         
@@ -141,22 +141,57 @@ load_checkpoint() {
                 log_info "Loading checkpoint for editing..."
                 source "$CHECKPOINT_FILE"
                 echo ""
-                log_info "Current service name: $SERVICE_NAME"
-                read -p "Enter new service name (lowercase, dashes only): " new_service_name
                 
-                # Validate service name
-                if [[ ! "$new_service_name" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
-                    log_error "Invalid service name. Must be lowercase, alphanumeric with dashes, 1-63 chars"
-                    log_info "Starting fresh..."
-                    rm -f "$CHECKPOINT_FILE"
-                    return 1
+                # Show current config
+                log_info "Current configuration:"
+                echo "  Service name: $SERVICE_NAME"
+                echo "  Memory: $MEMORY"
+                echo "  CPU: $CPU"
+                echo "  Min instances: $MIN_INSTANCES"
+                echo "  Max instances: $MAX_INSTANCES"
+                echo ""
+                
+                if confirm "Edit service name?" "n"; then
+                    read -p "Enter new service name (lowercase, dashes only): " new_service_name
+                    if [[ "$new_service_name" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
+                        SERVICE_NAME="$new_service_name"
+                    else
+                        log_error "Invalid service name. Keeping current: $SERVICE_NAME"
+                    fi
                 fi
                 
-                SERVICE_NAME="$new_service_name"
-                # Update checkpoint with new service name
+                if confirm "Edit max instances?" "y"; then
+                    log_info "Free tier limit: 20 max instances"
+                    read -p "Enter max instances (1-20 for free tier): " new_max
+                    if [[ "$new_max" =~ ^[0-9]+$ ]] && [ "$new_max" -ge 1 ] && [ "$new_max" -le 1000 ]; then
+                        MAX_INSTANCES="$new_max"
+                    else
+                        log_error "Invalid value. Keeping current: $MAX_INSTANCES"
+                    fi
+                fi
+                
+                if confirm "Edit memory?" "n"; then
+                    read -p "Enter memory (128Mi, 256Mi, 512Mi, 1Gi, 2Gi): " new_memory
+                    if [[ "$new_memory" =~ ^[0-9]+(Mi|Gi)$ ]]; then
+                        MEMORY="$new_memory"
+                    else
+                        log_error "Invalid value. Keeping current: $MEMORY"
+                    fi
+                fi
+                
+                if confirm "Edit CPU?" "n"; then
+                    read -p "Enter CPU (1, 2, 4, 8): " new_cpu
+                    if [[ "$new_cpu" =~ ^[1248]$ ]]; then
+                        CPU="$new_cpu"
+                    else
+                        log_error "Invalid value. Keeping current: $CPU"
+                    fi
+                fi
+                
+                # Update checkpoint with new values
                 save_checkpoint
                 CONFIG_LOADED=true
-                log_success "Service name updated to: $SERVICE_NAME"
+                log_success "Configuration updated!"
                 log_success "Resuming deployment..."
                 return 0
                 ;;
