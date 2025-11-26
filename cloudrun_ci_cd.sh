@@ -742,6 +742,15 @@ main() {
                     log_error "Invalid option"
                     ;;
             esac
+            
+            # Ask if user wants to continue or exit
+            echo ""
+            if confirm "Return to menu?" "n"; then
+                break  # Break from select, continue while loop
+            else
+                log_info "Goodbye!"
+                exit 0
+            fi
         done
     done
 }
