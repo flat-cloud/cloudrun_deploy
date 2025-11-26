@@ -891,7 +891,13 @@ main() {
     echo "  Project:          $PROJECT_ID"
     echo "  Region:           $REGION"
     echo "  Service:          $SERVICE_NAME"
-    echo "  Image:            $IMAGE_URL"
+    if [ "$BUILD_FROM_SOURCE" = true ]; then
+        echo "  Build Method:     Cloud Build (from source)"
+        echo "  Source Path:      $SOURCE_PATH"
+    else
+        echo "  Build Method:     Docker (local)"
+        echo "  Image:            $IMAGE_URL"
+    fi
     echo "  Port:             $PORT"
     echo "  Memory:           $MEMORY"
     echo "  CPU:              $CPU"
