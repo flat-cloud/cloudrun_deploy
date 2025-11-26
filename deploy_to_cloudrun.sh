@@ -123,17 +123,53 @@ load_checkpoint() {
         fi
         
         echo ""
-        if confirm "Resume from previous session?" "y"; then
-            log_info "Loading checkpoint..."
-            source "$CHECKPOINT_FILE"
-            CONFIG_LOADED=true
-            log_success "Checkpoint loaded! Resuming deployment..."
-            return 0
-        else
-            log_info "Starting fresh deployment"
-            rm -f "$CHECKPOINT_FILE"
-            return 1
-        fi
+        log_info "Options:"
+        echo "  1) Resume from checkpoint"
+        echo "  2) Edit service name and resume"
+        echo "  3) Start fresh (discard checkpoint)"
+        read -p "Choose option [1-3]: " resume_option
+        
+        case "$resume_option" in
+            1|"")
+                log_info "Loading checkpoint..."
+                source "$CHECKPOINT_FILE"
+                CONFIG_LOADED=true
+                log_success "Checkpoint loaded! Resuming deployment..."
+                return 0
+                ;;
+            2)
+                log_info "Loading checkpoint for editing..."
+                source "$CHECKPOINT_FILE"
+                echo ""
+                log_info "Current service name: $SERVICE_NAME"
+                read -p "Enter new service name (lowercase, dashes only): " new_service_name
+                
+                # Validate service name
+                if [[ ! "$new_service_name" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
+                    log_error "Invalid service name. Must be lowercase, alphanumeric with dashes, 1-63 chars"
+                    log_info "Starting fresh..."
+                    rm -f "$CHECKPOINT_FILE"
+                    return 1
+                fi
+                
+                SERVICE_NAME="$new_service_name"
+                # Update checkpoint with new service name
+                save_checkpoint
+                CONFIG_LOADED=true
+                log_success "Service name updated to: $SERVICE_NAME"
+                log_success "Resuming deployment..."
+                return 0
+                ;;
+            3)
+                log_info "Starting fresh deployment"
+                rm -f "$CHECKPOINT_FILE"
+                return 1
+                ;;
+            *)
+                log_error "Invalid option"
+                return 1
+                ;;
+        esac
     fi
     return 1
 }
