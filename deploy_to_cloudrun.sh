@@ -171,11 +171,25 @@ load_checkpoint() {
                 fi
                 
                 if confirm "Edit memory?" "n"; then
-                    read -p "Enter memory (128Mi, 256Mi, 512Mi, 1Gi, 2Gi): " new_memory
+                    log_info "Note: gen2 execution environment requires >= 512Mi"
+                    read -p "Enter memory (512Mi, 1Gi, 2Gi, 4Gi): " new_memory
                     if [[ "$new_memory" =~ ^[0-9]+(Mi|Gi)$ ]]; then
                         MEMORY="$new_memory"
                     else
                         log_error "Invalid value. Keeping current: $MEMORY"
+                    fi
+                fi
+                
+                if confirm "Edit execution environment?" "n"; then
+                    log_info "gen2 (recommended, requires >= 512Mi) or gen1 (legacy)"
+                    read -p "Execution environment (gen1/gen2): " new_exec
+                    if [[ "$new_exec" == "gen1" ]] || [[ "$new_exec" == "gen2" ]]; then
+                        EXEC_ENV="$new_exec"
+                        if [[ "$new_exec" == "gen1" ]]; then
+                            log_warning "gen1 allows lower memory but is legacy"
+                        fi
+                    else
+                        log_error "Invalid value. Keeping current: $EXEC_ENV"
                     fi
                 fi
                 
