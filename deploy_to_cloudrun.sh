@@ -227,6 +227,7 @@ get_app_config() {
     
     # Environment variables
     echo ""
+    ENV_VARS=""
     if confirm "Do you want to set environment variables?" "n"; then
         echo ""
         log_info "Enter environment variables (format: KEY=VALUE)"
@@ -248,6 +249,7 @@ get_app_config() {
     
     # Secrets
     echo ""
+    SECRETS=""
     if confirm "Do you want to mount secrets from Secret Manager?" "n"; then
         echo ""
         log_info "Enter secrets (format: ENV_VAR_NAME=SECRET_NAME:VERSION)"
@@ -270,6 +272,7 @@ get_app_config() {
     
     # Cloud SQL
     echo ""
+    CLOUDSQL=""
     if confirm "Do you want to connect to Cloud SQL?" "n"; then
         read -p "Enter Cloud SQL connection string (PROJECT:REGION:INSTANCE): " cloudsql_connection
         if [ ! -z "$cloudsql_connection" ]; then
@@ -279,6 +282,7 @@ get_app_config() {
     
     # VPC Connector
     echo ""
+    VPC_CONNECTOR=""
     if confirm "Do you want to use a VPC connector?" "n"; then
         read -p "Enter VPC connector name: " vpc_connector
         if [ ! -z "$vpc_connector" ]; then
