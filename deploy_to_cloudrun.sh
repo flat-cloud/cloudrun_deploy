@@ -797,7 +797,7 @@ deploy_to_cloudrun() {
     [ ! -z "$VPC_CONNECTOR" ] && DEPLOY_CMD="$DEPLOY_CMD $VPC_CONNECTOR"
     
     log_info "Deployment command:"
-    echo "$DEPLOY_CMD"
+    echo "$DEPLOY_CMD" | sed 's/ --/\n    --/g'
     echo ""
     
     if eval $DEPLOY_CMD; then
