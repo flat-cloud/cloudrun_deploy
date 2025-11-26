@@ -12,6 +12,8 @@ source "$(dirname "$0")/common.sh"
 # --- Default values ---
 CONFIG_FILE=""
 SKIP_CONFIRMATIONS=false
+CHECKPOINT_FILE=".cloudrun-checkpoint.sh"
+CHECKPOINT_MAX_AGE=3600  # 1 hour in seconds
 
 # --- Parse command-line arguments ---
 while [[ "$#" -gt 0 ]]; do
@@ -35,6 +37,112 @@ load_config() {
     else
         log_error "Configuration file not found: $1"
         exit 1
+    fi
+}
+
+# Save checkpoint after each major configuration step
+save_checkpoint() {
+    cat > "$CHECKPOINT_FILE" << EOF
+# Cloud Run Deployment Checkpoint
+# Created: $(date)
+# Timestamp: $(date +%s)
+
+PROJECT_ID='${PROJECT_ID:-}'
+REGION='${REGION:-}'
+SERVICE_NAME='${SERVICE_NAME:-}'
+PORT='${PORT:-}'
+MEMORY='${MEMORY:-}'
+CPU='${CPU:-}'
+CONCURRENCY='${CONCURRENCY:-}'
+MIN_INSTANCES='${MIN_INSTANCES:-}'
+MAX_INSTANCES='${MAX_INSTANCES:-}'
+TIMEOUT='${TIMEOUT:-}'
+ALLOW_UNAUTH='${ALLOW_UNAUTH:-}'
+ENV_VARS='${ENV_VARS:-}'
+SECRETS='${SECRETS:-}'
+CLOUDSQL='${CLOUDSQL:-}'
+VPC_CONNECTOR='${VPC_CONNECTOR:-}'
+BUILD_FROM_SOURCE='${BUILD_FROM_SOURCE:-}'
+SOURCE_PATH='${SOURCE_PATH:-}'
+DOCKERFILE_PATH='${DOCKERFILE_PATH:-}'
+BUILD_CONTEXT='${BUILD_CONTEXT:-}'
+IMAGE_URL='${IMAGE_URL:-}'
+AR_REPO='${AR_REPO:-}'
+INGRESS='${INGRESS:-}'
+VPC_EGRESS='${VPC_EGRESS:-}'
+EXEC_ENV='${EXEC_ENV:-}'
+SERVICE_ACCOUNT='${SERVICE_ACCOUNT:-}'
+LABELS='${LABELS:-}'
+ANNOTATIONS='${ANNOTATIONS:-}'
+REV_TAG='${REV_TAG:-}'
+NO_TRAFFIC='${NO_TRAFFIC:-}'
+REV_SUFFIX='${REV_SUFFIX:-}'
+CHECKPOINT_STAGE='${CHECKPOINT_STAGE:-}'
+EOF
+}
+
+# Check if checkpoint exists and is recent
+check_checkpoint() {
+    if [ ! -f "$CHECKPOINT_FILE" ]; then
+        return 1
+    fi
+    
+    # Extract timestamp from checkpoint
+    local checkpoint_time=$(grep "^# Timestamp:" "$CHECKPOINT_FILE" | cut -d' ' -f3)
+    local current_time=$(date +%s)
+    local age=$((current_time - checkpoint_time))
+    
+    # Check if checkpoint is recent (less than 1 hour old)
+    if [ $age -gt $CHECKPOINT_MAX_AGE ]; then
+        log_info "Found old checkpoint (${age}s old), ignoring..."
+        return 1
+    fi
+    
+    return 0
+}
+
+# Load checkpoint and offer to resume
+load_checkpoint() {
+    if check_checkpoint; then
+        echo ""
+        log_info "Found recent deployment session"
+        
+        # Show checkpoint details
+        local checkpoint_date=$(grep "^# Created:" "$CHECKPOINT_FILE" | cut -d' ' -f3-)
+        log_info "Last session: $checkpoint_date"
+        
+        # Extract service name from checkpoint
+        local saved_service=$(grep "^SERVICE_NAME=" "$CHECKPOINT_FILE" | cut -d"'" -f2)
+        local saved_stage=$(grep "^CHECKPOINT_STAGE=" "$CHECKPOINT_FILE" | cut -d"'" -f2)
+        
+        if [ -n "$saved_service" ]; then
+            log_info "Service: $saved_service"
+        fi
+        if [ -n "$saved_stage" ]; then
+            log_info "Stage: $saved_stage"
+        fi
+        
+        echo ""
+        if confirm "Resume from previous session?" "y"; then
+            log_info "Loading checkpoint..."
+            source "$CHECKPOINT_FILE"
+            CONFIG_LOADED=true
+            log_success "Checkpoint loaded! Resuming deployment..."
+            return 0
+        else
+            log_info "Starting fresh deployment"
+            rm -f "$CHECKPOINT_FILE"
+            return 1
+        fi
+    fi
+    return 1
+}
+
+# Clear checkpoint on successful deployment
+clear_checkpoint() {
+    if [ -f "$CHECKPOINT_FILE" ]; then
+        rm -f "$CHECKPOINT_FILE"
+        log_info "Checkpoint cleared"
     fi
 }
 
@@ -240,6 +348,10 @@ get_app_config() {
     fi
     
     echo ""
+    
+    # Save checkpoint after app config
+    CHECKPOINT_STAGE="app_config_complete"
+    save_checkpoint
 }
 
 # Generate sample Dockerfile
@@ -797,6 +909,10 @@ choose_build_mode() {
             *) log_error "Invalid option";;
         esac
     done
+    
+    # Save checkpoint after build mode selection
+    CHECKPOINT_STAGE="build_mode_complete"
+    save_checkpoint
 }
 
 # Collect advanced deployment options
@@ -861,6 +977,11 @@ collect_advanced_options() {
     
     # Optional revision suffix
     read -p "Revision suffix (leave blank to auto-generate): " REV_SUFFIX
+    REV_SUFFIX=${REV_SUFFIX:-}
+    
+    # Save checkpoint after advanced options
+    CHECKPOINT_STAGE="advanced_options_complete"
+    save_checkpoint
 }
 
 # Main execution
@@ -870,7 +991,11 @@ main() {
     CHECK_DOCKER=true
     check_prerequisites
     
-    if [ -n "$CONFIG_FILE" ]; then
+    # Try to load checkpoint first (most recent session)
+    if [ "$SKIP_CONFIRMATIONS" = false ] && load_checkpoint; then
+        # Checkpoint loaded, CONFIG_LOADED is set to true
+        :
+    elif [ -n "$CONFIG_FILE" ]; then
         load_config "$CONFIG_FILE"
     elif [ "$SKIP_CONFIRMATIONS" = false ]; then
         find_and_load_config
@@ -878,6 +1003,9 @@ main() {
 
     if [ "${CONFIG_LOADED:-false}" = false ]; then
         get_project_config
+        CHECKPOINT_STAGE="project_config_complete"
+        save_checkpoint
+        
         get_app_config
         choose_build_mode
         collect_advanced_options
@@ -933,6 +1061,9 @@ main() {
         curl -i $SERVICE_URL
         echo ""
     fi
+    
+    # Clear checkpoint on success
+    clear_checkpoint
     
     log_success "All done! 🚀"
 }

@@ -3,6 +3,7 @@
 .cloudrun_deploy_*.conf
 .gcp_cloudrun_config
 .cloudrun_backups/
+.cloudrun-checkpoint.sh
 Dockerfile
 Makefile
 .github/workflows/deploy-to-cloudrun.yml
