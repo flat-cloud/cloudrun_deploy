@@ -135,58 +135,7 @@ get_app_config() {
         fi
     fi
     
-    # Dockerfile location
-    read -p "Enter path to Dockerfile (default: ./Dockerfile): " DOCKERFILE_PATH
-    DOCKERFILE_PATH=${DOCKERFILE_PATH:-./Dockerfile}
-    
-    if [ ! -f "$DOCKERFILE_PATH" ]; then
-        log_warning "Dockerfile not found at: $DOCKERFILE_PATH"
-        if confirm "Do you want to generate a sample Dockerfile?" "y"; then
-            generate_dockerfile_interactive
-        else
-            log_error "Cannot proceed without a Dockerfile"
-            exit 1
-        fi
-    fi
-    
-    # Build context
-    read -p "Enter build context directory (default: .): " BUILD_CONTEXT
-    BUILD_CONTEXT=${BUILD_CONTEXT:-.}
-    
-    # Image registry choice
-    echo ""
-    log_info "Choose container registry:"
-    options=("Google Artifact Registry (recommended)" "Google Container Registry (gcr.io)")
-    select opt in "${options[@]}"; do
-        case $opt in
-            "Google Artifact Registry (recommended)")
-                read -p "Enter Artifact Registry repository name (default: cloud-run-apps): " AR_REPO
-                AR_REPO=${AR_REPO:-cloud-run-apps}
-                IMAGE_URL="$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/$SERVICE_NAME"
-                
-                # Check if repository exists, create if not
-                if ! gcloud artifacts repositories describe $AR_REPO --location=$REGION &>/dev/null; then
-                    log_warning "Artifact Registry repository '$AR_REPO' not found"
-                    if confirm "Create repository?" "y"; then
-                        log_info "Creating Artifact Registry repository..."
-                        gcloud artifacts repositories create $AR_REPO \
-                            --repository-format=docker \
-                            --location=$REGION \
-                            --description="Cloud Run applications"
-                        log_success "Repository created"
-                    fi
-                fi
-                break
-                ;;
-            "Google Container Registry (gcr.io)")
-                IMAGE_URL="gcr.io/$PROJECT_ID/$SERVICE_NAME"
-                break
-                ;;
-            *) log_error "Invalid option";;
-        esac
-    done
-    
-    # Port configuration
+    # Container port
     read -p "Enter container port (default: 8080): " PORT
     PORT=${PORT:-8080}
     
@@ -776,17 +725,73 @@ choose_build_mode() {
     fi
     echo ""
     log_info "Build options:"
-    options=("Build locally with Docker (current flow)" "Build from source using Cloud Build (no local Docker required)")
+    options=("Build locally with Docker" "Build from source using Cloud Build (no Dockerfile required)")
     select opt in "${options[@]}"; do
         case $opt in
-            "Build locally with Docker (current flow)")
+            "Build locally with Docker")
                 BUILD_FROM_SOURCE=false
+                
+                # Ask for Dockerfile only if using Docker build
+                echo ""
+                read -p "Enter path to Dockerfile (default: ./Dockerfile): " DOCKERFILE_PATH
+                DOCKERFILE_PATH=${DOCKERFILE_PATH:-./Dockerfile}
+                
+                if [ ! -f "$DOCKERFILE_PATH" ]; then
+                    log_warning "Dockerfile not found at: $DOCKERFILE_PATH"
+                    if confirm "Do you want to generate a sample Dockerfile?" "y"; then
+                        generate_dockerfile_interactive
+                    else
+                        log_error "Cannot proceed without a Dockerfile"
+                        exit 1
+                    fi
+                fi
+                
+                # Build context
+                read -p "Enter build context directory (default: .): " BUILD_CONTEXT
+                BUILD_CONTEXT=${BUILD_CONTEXT:-.}
+                
+                # Image registry choice (only for Docker builds)
+                echo ""
+                log_info "Choose container registry:"
+                options_registry=("Google Artifact Registry (recommended)" "Google Container Registry (gcr.io)")
+                select opt_registry in "${options_registry[@]}"; do
+                    case $opt_registry in
+                        "Google Artifact Registry (recommended)")
+                            read -p "Enter Artifact Registry repository name (default: cloud-run-apps): " AR_REPO
+                            AR_REPO=${AR_REPO:-cloud-run-apps}
+                            IMAGE_URL="$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/$SERVICE_NAME"
+                            
+                            # Check if repository exists, create if not
+                            if ! gcloud artifacts repositories describe $AR_REPO --location=$REGION &>/dev/null; then
+                                log_warning "Artifact Registry repository '$AR_REPO' not found"
+                                if confirm "Create repository?" "y"; then
+                                    log_info "Creating Artifact Registry repository..."
+                                    gcloud artifacts repositories create $AR_REPO \
+                                        --repository-format=docker \
+                                        --location=$REGION \
+                                        --description="Docker repository for Cloud Run applications"
+                                    log_success "Repository created"
+                                else
+                                    log_error "Cannot proceed without a repository"
+                                    exit 1
+                                fi
+                            fi
+                            break
+                            ;;
+                        "Google Container Registry (gcr.io)")
+                            IMAGE_URL="gcr.io/$PROJECT_ID/$SERVICE_NAME"
+                            break
+                            ;;
+                        *) log_error "Invalid option";;
+                    esac
+                done
                 break
                 ;;
-            "Build from source using Cloud Build (no local Docker required)")
+            "Build from source using Cloud Build (no Dockerfile required)")
                 BUILD_FROM_SOURCE=true
                 read -p "Enter source directory (default: .): " SOURCE_PATH
                 SOURCE_PATH=${SOURCE_PATH:-.}
+                log_info "Cloud Build will automatically detect your app type and containerize it"
                 break
                 ;;
             *) log_error "Invalid option";;
