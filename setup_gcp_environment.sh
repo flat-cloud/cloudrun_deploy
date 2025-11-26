@@ -30,9 +30,10 @@ detect_os() {
     log_info "Detected OS: $OS"
 }
 
-# Check if command exists
+# Check if command exists (skip bash functions, check actual commands)
 command_exists() {
-    command -v "$1" >/dev/null 2>&1
+    # Use 'type -P' to find actual executables in PATH, not bash functions
+    type -P "$1" >/dev/null 2>&1
 }
 
 # Install Docker
@@ -47,7 +48,7 @@ install_docker() {
     log_warning "Docker not found. Installing Docker..."
     
     case $OS in
-        ubuntu|debian)
+        ubuntu|debian|linuxmint)
             sudo apt-get update
             sudo apt-get install -y \
                 ca-certificates \
@@ -56,10 +57,15 @@ install_docker() {
                 lsb-release
             
             sudo mkdir -p /etc/apt/keyrings
-            curl -fsSL https://download.docker.com/linux/$OS/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            # For linuxmint, use ubuntu as the base
+            local DOCKER_OS=${OS}
+            if [ "$OS" = "linuxmint" ]; then
+                DOCKER_OS="ubuntu"
+            fi
+            curl -fsSL https://download.docker.com/linux/${DOCKER_OS}/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
             
             echo \
-                "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$OS \
+                "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${DOCKER_OS} \
                 $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
             
             sudo apt-get update
@@ -112,7 +118,7 @@ install_gcloud() {
     log_warning "gcloud SDK not found. Installing..."
     
     case $OS in
-        ubuntu|debian)
+        ubuntu|debian|linuxmint)
             sudo install -m 0755 -d /etc/apt/keyrings
             curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/cloud.google.gpg
             echo "deb [signed-by=/etc/apt/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
@@ -166,7 +172,7 @@ install_additional_tools() {
     # Install jq for JSON parsing
     if ! command_exists jq; then
         case $OS in
-            ubuntu|debian)
+            ubuntu|debian|linuxmint)
                 sudo apt-get install -y jq
                 ;;
             centos|rhel|fedora)
@@ -183,7 +189,7 @@ install_additional_tools() {
     # Install git
     if ! command_exists git; then
         case $OS in
-            ubuntu|debian)
+            ubuntu|debian|linuxmint)
                 sudo apt-get install -y git
                 ;;
             centos|rhel|fedora)
@@ -200,7 +206,7 @@ install_additional_tools() {
     # Install curl
     if ! command_exists curl; then
         case $OS in
-            ubuntu|debian)
+            ubuntu|debian|linuxmint)
                 sudo apt-get install -y curl
                 ;;
             centos|rhel|fedora)

@@ -57,6 +57,11 @@ gcloud() {
         echo "[DRY-RUN] gcloud $*"
         return 0
     fi
+    # Check if the actual gcloud command exists
+    if ! command -v gcloud &> /dev/null; then
+        echo "[ERROR] gcloud command not found in PATH" >&2
+        return 127
+    fi
     command gcloud "$@"
 }
 
@@ -65,6 +70,11 @@ docker() {
         echo "[DRY-RUN] docker $*"
         return 0
     fi
+    # Check if the actual docker command exists
+    if ! command -v docker &> /dev/null; then
+        echo "[ERROR] docker command not found in PATH" >&2
+        return 127
+    fi
     command docker "$@"
 }
 
@@ -72,6 +82,11 @@ curl() {
     if [[ "$DRY_RUN" == "true" ]]; then
         echo "[DRY-RUN] curl $*"
         return 0
+    fi
+    # Check if the actual curl command exists
+    if ! command -v curl &> /dev/null; then
+        echo "[ERROR] curl command not found in PATH" >&2
+        return 127
     fi
     command curl "$@"
 }
