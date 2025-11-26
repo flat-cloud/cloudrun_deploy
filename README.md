@@ -351,3 +351,55 @@ MIT License - see [LICENSE](LICENSE) file for details
 **Made with ❤️ for the Cloud Run community**
 
 Star ⭐ this repo if you find it useful!
+
+---
+
+## 🌐 Custom Domain Setup
+
+After deploying your service, map a custom domain with automatic HTTPS:
+
+### Using gcloud CLI
+
+```bash
+# Map your domain
+gcloud run domain-mappings create \
+  --service=your-service-name \
+  --domain=yourdomain.com \
+  --region=us-central1
+```
+
+### Using Cloud Console
+
+1. Go to [Cloud Run Domains](https://console.cloud.google.com/run/domains)
+2. Click "Add Mapping"
+3. Select your service and enter your domain
+4. Add the provided DNS records to your domain registrar
+
+### DNS Configuration
+
+**For subdomain (api.yourdomain.com):**
+```
+Type: CNAME
+Host: api
+Value: ghs.googlehosted.com
+```
+
+**For root domain:** Cloud Run provides A and AAAA records
+
+### Benefits
+
+- ✅ **Free automatic SSL/TLS certificates** (Google-managed)
+- ✅ **Auto-renewal** - Never expire
+- ✅ **Zero config** - Just add DNS records
+- ✅ **Multiple domains** supported
+
+### Verify
+
+```bash
+# Check status (DNS propagation: 5-60 minutes)
+gcloud run domain-mappings describe --domain=yourdomain.com --region=us-central1
+
+# Test
+curl https://yourdomain.com
+```
+
