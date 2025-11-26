@@ -555,7 +555,7 @@ create_github_actions() {
     
     mkdir -p .github/workflows
     
-    cat > .github/workflows/deploy-to-cloudrun.yml << EOF
+    cat > .github/workflows/deploy-to-cloudrun.yml << 'EOF'
 name: Deploy to Cloud Run
 
 on:
@@ -569,10 +569,10 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_ID: \\${{ secrets.GCP_PROJECT_ID }}
-  SERVICE_NAME: $SERVICE_NAME
-  REGION: $REGION
-  GAR_LOCATION: $REGION
+  PROJECT_ID: \${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: SERVICE_NAME_PLACEHOLDER
+  REGION: REGION_PLACEHOLDER
+  GAR_LOCATION: REGION_PLACEHOLDER
 
 jobs:
   deploy:
@@ -628,6 +628,10 @@ jobs:
       - name: Output service URL
         run: echo "Service URL: \\${{ steps.deploy.outputs.url }}"
 EOF
+    
+    # Replace placeholders with actual values
+    sed -i "s/SERVICE_NAME_PLACEHOLDER/$SERVICE_NAME/g" .github/workflows/deploy-to-cloudrun.yml
+    sed -i "s/REGION_PLACEHOLDER/$REGION/g" .github/workflows/deploy-to-cloudrun.yml
     
     log_success "Created: .github/workflows/deploy-to-cloudrun.yml"
     echo ""
